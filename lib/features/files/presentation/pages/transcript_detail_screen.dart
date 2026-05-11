@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:voice_ink/config/utilities/extensions/user_extension.dart';
+import 'package:voice_ink/features/files/presentation/cubit/files_cubit.dart';
 import 'package:voice_ink/features/files/presentation/cubit/transcript_details/transcript_detail_cubit.dart';
 import 'package:voice_ink/features/files/presentation/cubit/transcript_details/transcript_detail_state.dart';
 import 'package:voice_ink/features/files/presentation/widget/analysis_tab_widget.dart';
@@ -13,9 +14,15 @@ import 'package:voice_ink/features/files/presentation/widget/waveform_player_wid
 class TranscriptDetailScreen extends StatefulWidget {
   final String fileId;
 
+  /// Set true when navigating here right after an upload with the
+  /// auto-transcribe toggle on. The cubit then polls until the transcription
+  /// shows up so the user doesn't have to refresh manually.
+  final bool autoTranscribeOnArrival;
+
   const TranscriptDetailScreen({
     super.key,
     required this.fileId,
+    this.autoTranscribeOnArrival = false,
   });
 
   @override
@@ -33,10 +40,14 @@ class _TranscriptDetailScreenState extends State<TranscriptDetailScreen>
     _tabController.addListener(_onTabChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<TranscriptDetailCubit>().loadFileDetail(
-            fileId: widget.fileId,
-            token: context.token,
-          );
+      final cubit = context.read<TranscriptDetailCubit>();
+      cubit.loadFileDetail(
+        fileId: widget.fileId,
+        token: context.token,
+      );
+      if (widget.autoTranscribeOnArrival) {
+        cubit.startTranscriptionPolling();
+      }
     });
   }
 
@@ -80,10 +91,20 @@ class _TranscriptDetailScreenState extends State<TranscriptDetailScreen>
         );
       },
       builder: (context, state) {
-        return Scaffold(
-          backgroundColor: const Color(0xFFF9FAFB),
-          body: SafeArea(
-            child: _buildBody(context, state),
+        return PopScope(
+          canPop: true,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) {
+              // Refresh the Files list so any status change (e.g.
+              // processing → transcribed) is reflected immediately.
+              context.read<FilesCubit>().refreshFiles();
+            }
+          },
+          child: Scaffold(
+            backgroundColor: const Color(0xFFF9FAFB),
+            body: SafeArea(
+              child: _buildBody(context, state),
+            ),
           ),
         );
       },
@@ -99,16 +120,33 @@ class _TranscriptDetailScreenState extends State<TranscriptDetailScreen>
       return _buildErrorState(context, state);
     }
 
+    // Editor and Analysis are usable whenever there's a result to edit/analyze,
+    // regardless of the file's overall status (e.g. a failed re-transcribe
+    // doesn't lose access to the previously-completed transcript).
+    final canEditOrAnalyze = state.fileDetail.transcriptionResult != null;
+
+    // If user is on a disabled tab (e.g. file went back to processing after
+    // a re-transcribe), snap them back to the Transcript tab.
+    if (!canEditOrAnalyze && _tabController.index != 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _tabController.animateTo(0);
+      });
+    }
+
     return Column(
       children: [
         // Header with file info and waveform
         _buildHeader(context, state),
         // Tab bar
-        _buildTabBar(context),
+        _buildTabBar(context, canEditOrAnalyze: canEditOrAnalyze),
         // Tab content
         Expanded(
           child: TabBarView(
             controller: _tabController,
+            physics: canEditOrAnalyze
+                ? null
+                : const NeverScrollableScrollPhysics(),
             children: const [
               TranscriptTabWidget(),
               EditorTabWidget(),
@@ -343,7 +381,19 @@ class _TranscriptDetailScreenState extends State<TranscriptDetailScreen>
     );
   }
 
-  Widget _buildTabBar(BuildContext context) {
+  Widget _buildTabBar(
+    BuildContext context, {
+    required bool canEditOrAnalyze,
+  }) {
+    final disabledColor = Colors.grey.shade400;
+
+    Widget gatedTab(Widget child) {
+      if (canEditOrAnalyze) return child;
+      return IgnorePointer(
+        child: Opacity(opacity: 0.45, child: child),
+      );
+    }
+
     return Container(
       color: Colors.white,
       padding: EdgeInsets.symmetric(horizontal: 16.w),
@@ -367,6 +417,12 @@ class _TranscriptDetailScreenState extends State<TranscriptDetailScreen>
             fontSize: 14.sp,
             fontWeight: FontWeight.w500,
           ),
+          onTap: (index) {
+            // Block taps on Editor/Analysis when not yet completed.
+            if (!canEditOrAnalyze && index != 0) {
+              _tabController.animateTo(0);
+            }
+          },
           tabs: [
             Tab(
               child: Row(
@@ -378,24 +434,46 @@ class _TranscriptDetailScreenState extends State<TranscriptDetailScreen>
                 ],
               ),
             ),
-            Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.edit_outlined, size: 16.sp),
-                  SizedBox(width: 6.w),
-                  const Text('Editor'),
-                ],
+            gatedTab(
+              Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.edit_outlined,
+                      size: 16.sp,
+                      color: canEditOrAnalyze ? null : disabledColor,
+                    ),
+                    SizedBox(width: 6.w),
+                    Text(
+                      'Editor',
+                      style: canEditOrAnalyze
+                          ? null
+                          : TextStyle(color: disabledColor),
+                    ),
+                  ],
+                ),
               ),
             ),
-            Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.bar_chart_outlined, size: 16.sp),
-                  SizedBox(width: 6.w),
-                  const Text('Analysis'),
-                ],
+            gatedTab(
+              Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.bar_chart_outlined,
+                      size: 16.sp,
+                      color: canEditOrAnalyze ? null : disabledColor,
+                    ),
+                    SizedBox(width: 6.w),
+                    Text(
+                      'Analysis',
+                      style: canEditOrAnalyze
+                          ? null
+                          : TextStyle(color: disabledColor),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

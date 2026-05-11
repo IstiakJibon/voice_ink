@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -23,6 +24,13 @@ class FilesCubit extends Cubit<FilesState> {
 
   static const int _limit = 20;
   String _token = '';
+  Timer? _searchDebounce;
+
+  @override
+  Future<void> close() {
+    _searchDebounce?.cancel();
+    return super.close();
+  }
 
   /// Fetch initial files (page 1)
   Future<void> getAudioFiles({required String token}) async {
@@ -40,6 +48,10 @@ class FilesCubit extends Cubit<FilesState> {
       limit: _limit,
       sortBy: state.sortBy,
       sortOrder: state.sortOrder,
+      search: state.searchQuery,
+      source: state.filterSourceParam,
+      isFavorite: state.filterFavoriteParam,
+      folderId: state.folderId,
     )
         .then((res) {
       res.fold((err) {
@@ -85,6 +97,10 @@ class FilesCubit extends Cubit<FilesState> {
       limit: _limit,
       sortBy: state.sortBy,
       sortOrder: state.sortOrder,
+      search: state.searchQuery,
+      source: state.filterSourceParam,
+      isFavorite: state.filterFavoriteParam,
+      folderId: state.folderId,
     )
         .then((res) {
       res.fold((err) {
@@ -134,5 +150,91 @@ class FilesCubit extends Cubit<FilesState> {
       allFiles: [],
     ));
     await getAudioFiles(token: _token);
+  }
+
+  /// Change filter chip (All / Uploads / Favorites / Imported) — server-side
+  Future<void> changeFilter(FilesFilter filter) async {
+    if (state.filter == filter || _token.isEmpty) return;
+    emit(state.copyWith(
+      filter: filter,
+      currentPage: 1,
+      allFiles: [],
+    ));
+    await getAudioFiles(token: _token);
+  }
+
+  /// Select a folder to filter files by. Pass null to show all files.
+  Future<void> selectFolder(String? folderId) async {
+    if (state.folderId == folderId || _token.isEmpty) return;
+    emit(state.copyWith(
+      folderId: folderId,
+      clearFolderId: folderId == null,
+      currentPage: 1,
+      allFiles: [],
+    ));
+    await getAudioFiles(token: _token);
+  }
+
+  /// Search files (debounced 350ms). Empty query reloads full list.
+  void searchFiles(String query) {
+    _searchDebounce?.cancel();
+    final trimmed = query.trim();
+    if (trimmed == state.searchQuery) return;
+
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (_token.isEmpty) return;
+      emit(state.copyWith(
+        searchQuery: trimmed,
+        currentPage: 1,
+        allFiles: [],
+      ));
+      getAudioFiles(token: _token);
+    });
+  }
+
+  /// Toggle favorite with optimistic update (revert on failure)
+  Future<void> toggleFavorite({required String fileId}) async {
+    if (_token.isEmpty) return;
+
+    final index = state.allFiles.indexWhere((f) => f.id == fileId);
+    if (index == -1) return;
+
+    final original = state.allFiles[index];
+    final newValue = !(original.isFavorite ?? false);
+
+    final optimisticList = [...state.allFiles];
+    optimisticList[index] = original.copyWith(isFavorite: newValue);
+    emit(state.copyWith(allFiles: optimisticList));
+
+    await filesUseCase
+        .toggleFavorite(
+      token: _token,
+      fileId: fileId,
+      isFavorite: newValue,
+    )
+        .then((res) {
+      res.fold((err) {
+        log("Toggle favorite error: ${err.toString()}");
+        final revertList = [...state.allFiles];
+        final i = revertList.indexWhere((f) => f.id == fileId);
+        if (i != -1) {
+          revertList[i] = revertList[i].copyWith(isFavorite: !newValue);
+          emit(state.copyWith(
+            allFiles: revertList,
+            errorMessage: err.message,
+          ));
+        }
+      }, (_) {
+        log("Toggle favorite success: $fileId -> $newValue");
+      });
+    }).onError((error, stackTrace) {
+      log("Toggle favorite error: ${error.toString()}");
+      final revertList = [...state.allFiles];
+      final i = revertList.indexWhere((f) => f.id == fileId);
+      if (i != -1) {
+        revertList[i] = revertList[i].copyWith(isFavorite: !newValue);
+        emit(state.copyWith(allFiles: revertList));
+      }
+    });
   }
 }

@@ -1,6 +1,33 @@
 // ==================== STREAM URL MODEL ====================
 import 'package:voice_ink/features/files/domain/entities/transcript_detail_entities.dart';
 
+/// Normalise a timestamp to milliseconds.
+/// Providers like AssemblyAI/Speechmatics return integer milliseconds,
+/// Deepgram returns double seconds (e.g. 11.84). Detect by type.
+int? _parseTimestampMs(dynamic value) {
+  if (value == null) return null;
+  if (value is int) return value;
+  if (value is double) return (value * 1000).round();
+  if (value is num) return (value.toDouble() * 1000).round();
+  return null;
+}
+
+class TranscriptionStatusModel extends TranscriptionStatusEntities {
+  const TranscriptionStatusModel({
+    super.status,
+    super.progress,
+    super.error,
+  });
+
+  factory TranscriptionStatusModel.fromJson(Map<String, dynamic> json) {
+    return TranscriptionStatusModel(
+      status: json['status'] as String?,
+      progress: (json['progress'] as num?)?.toDouble(),
+      error: json['error'] as String?,
+    );
+  }
+}
+
 class StreamUrlModel extends StreamUrlEntities {
   const StreamUrlModel({
     super.url,
@@ -44,7 +71,9 @@ class TranscriptionResultMetaModel extends TranscriptionResultMetaEntities {
           ? (json['confidence'] as num).toDouble()
           : null,
       wordCount: json['wordCount'],
-      duration: json['duration'],
+      duration: json['duration'] != null
+          ? (json['duration'] as num).toInt()
+          : null,
       featuresEnabled: json['featuresEnabled'] != null
           ? List<String>.from(json['featuresEnabled'])
           : null,
@@ -63,10 +92,11 @@ class TranscriptionResultsListModel extends TranscriptionResultsListEntities {
   factory TranscriptionResultsListModel.fromJson(Map<String, dynamic> json) {
     return TranscriptionResultsListModel(
       results: json['results'] != null
-          ? (json['results'] as List)
-              .map((e) => TranscriptionResultMetaModel.fromJson(e))
-              .toList()
-          : [],
+          ? List<TranscriptionResultMetaEntities>.from(
+              (json['results'] as List)
+                  .map((e) => TranscriptionResultMetaModel.fromJson(e)),
+            )
+          : <TranscriptionResultMetaEntities>[],
       primaryResultId: json['primaryResultId'],
       totalAttempts: json['totalAttempts'],
     );
@@ -86,8 +116,8 @@ class WordModel extends WordEntities {
   factory WordModel.fromJson(Map<String, dynamic> json) {
     return WordModel(
       text: json['text'],
-      start: json['start'],
-      end: json['end'],
+      start: _parseTimestampMs(json['start']),
+      end: _parseTimestampMs(json['end']),
       confidence: json['confidence'] != null
           ? (json['confidence'] as num).toDouble()
           : null,
@@ -140,8 +170,8 @@ class UtteranceModel extends UtteranceEntities {
       confidence: json['confidence'] != null
           ? (json['confidence'] as num).toDouble()
           : null,
-      start: json['start'],
-      end: json['end'],
+      start: _parseTimestampMs(json['start']),
+      end: _parseTimestampMs(json['end']),
       words: json['words'] != null
           ? (json['words'] as List).map((e) => WordModel.fromJson(e)).toList()
           : [],

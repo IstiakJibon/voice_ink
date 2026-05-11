@@ -43,6 +43,11 @@ class TranscriptDetailState extends Equatable {
   final int? selectedWordForEdit;
   final bool isUpdatingWord;
 
+  // Multi-result picker States
+  final String? selectedResultId;
+  final bool isSwitchingResult;
+  final bool resultsListLoaded;
+
   const TranscriptDetailState({
     this.status = TranscriptDetailStatus.initial,
     this.errorMessage,
@@ -61,6 +66,9 @@ class TranscriptDetailState extends Equatable {
     this.hasUnsavedChanges = false,
     this.selectedWordForEdit,
     this.isUpdatingWord = false,
+    this.selectedResultId,
+    this.isSwitchingResult = false,
+    this.resultsListLoaded = false,
   });
 
   TranscriptDetailState copyWith({
@@ -83,6 +91,10 @@ class TranscriptDetailState extends Equatable {
     int? selectedWordForEdit,
     bool clearSelectedWordForEdit = false,
     bool? isUpdatingWord,
+    String? selectedResultId,
+    bool clearSelectedResultId = false,
+    bool? isSwitchingResult,
+    bool? resultsListLoaded,
   }) {
     return TranscriptDetailState(
       status: status ?? this.status,
@@ -107,6 +119,11 @@ class TranscriptDetailState extends Equatable {
           ? null
           : (selectedWordForEdit ?? this.selectedWordForEdit),
       isUpdatingWord: isUpdatingWord ?? this.isUpdatingWord,
+      selectedResultId: clearSelectedResultId
+          ? null
+          : (selectedResultId ?? this.selectedResultId),
+      isSwitchingResult: isSwitchingResult ?? this.isSwitchingResult,
+      resultsListLoaded: resultsListLoaded ?? this.resultsListLoaded,
     );
   }
 
@@ -135,9 +152,9 @@ class TranscriptDetailState extends Equatable {
     return fileDetail.transcriptionResult?.words ?? [];
   }
 
-  /// Get utterances grouped by speaker
+  /// Get utterances grouped by speaker (consecutive same-speaker merged)
   List<UtteranceEntities> get utterances {
-    return fileDetail.transcriptionResult?.utterances ?? [];
+    return fileDetail.transcriptionResult?.mergedUtterances ?? [];
   }
 
   /// Get formatted current position
@@ -191,5 +208,8 @@ class TranscriptDetailState extends Equatable {
         hasUnsavedChanges,
         selectedWordForEdit,
         isUpdatingWord,
+        selectedResultId,
+        isSwitchingResult,
+        resultsListLoaded,
       ];
 }

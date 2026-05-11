@@ -9,5 +9,15 @@ abstract class FilesRepository {
     required int limit,
     String sortBy = 'createdAt',
     String sortOrder = 'DESC',
+    String? search,
+    String? source,
+    bool? isFavorite,
+    String? folderId,
+  });
+
+  Future<Either<Failure, bool>> toggleFavorite({
+    required String token,
+    required String fileId,
+    required bool isFavorite,
   });
 }

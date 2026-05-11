@@ -107,8 +107,69 @@ class AudioFileEntity extends Equatable {
     required this.transcriptionStatus,
   });
 
-  /// Get formatted duration string (MM:SS or HH:MM:SS)
+  AudioFileEntity copyWith({
+    String? id,
+    String? path,
+    String? name,
+    String? originalFilename,
+    String? mimetype,
+    String? type,
+    String? status,
+    String? size,
+    int? duration,
+    String? audioFormat,
+    int? sampleRate,
+    int? channels,
+    int? bitrate,
+    String? description,
+    dynamic tags,
+    String? userId,
+    String? folderId,
+    String? source,
+    AudioFileMetadata? metadata,
+    String? errorMessage,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? deletedAt,
+    DateTime? processedAt,
+    bool? isFavorite,
+    String? transcriptionStatus,
+  }) {
+    return AudioFileEntity(
+      id: id ?? this.id,
+      path: path ?? this.path,
+      name: name ?? this.name,
+      originalFilename: originalFilename ?? this.originalFilename,
+      mimetype: mimetype ?? this.mimetype,
+      type: type ?? this.type,
+      status: status ?? this.status,
+      size: size ?? this.size,
+      duration: duration ?? this.duration,
+      audioFormat: audioFormat ?? this.audioFormat,
+      sampleRate: sampleRate ?? this.sampleRate,
+      channels: channels ?? this.channels,
+      bitrate: bitrate ?? this.bitrate,
+      description: description ?? this.description,
+      tags: tags ?? this.tags,
+      userId: userId ?? this.userId,
+      folderId: folderId ?? this.folderId,
+      source: source ?? this.source,
+      metadata: metadata ?? this.metadata,
+      errorMessage: errorMessage ?? this.errorMessage,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      processedAt: processedAt ?? this.processedAt,
+      isFavorite: isFavorite ?? this.isFavorite,
+      transcriptionStatus: transcriptionStatus ?? this.transcriptionStatus,
+    );
+  }
+
+  /// Get formatted duration string (MM:SS or HH:MM:SS). Returns "—:—" when
+  /// the backend hasn't populated the duration yet (e.g. right after upload).
   String get formattedDuration {
+    if (duration <= 0) return '—:—';
+
     final hours = duration ~/ 3600;
     final minutes = (duration % 3600) ~/ 60;
     final seconds = duration % 60;

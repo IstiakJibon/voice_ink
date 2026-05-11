@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:voice_ink/config/utilities/speaker_utils.dart';
 import 'package:voice_ink/features/files/domain/entities/transcript_detail_entities.dart';
 import 'package:voice_ink/features/files/presentation/cubit/transcript_details/transcript_detail_cubit.dart';
 import 'package:voice_ink/features/files/presentation/cubit/transcript_details/transcript_detail_state.dart';
@@ -8,8 +9,15 @@ import 'package:voice_ink/features/files/presentation/cubit/transcript_details/t
 /// Editor Tab - Matches Figma design
 /// Top card: Edit Transcript header + Speakers panel
 /// Transcript card: Undo/Redo toolbar + Utterance blocks with tappable words
-class EditorTabWidget extends StatelessWidget {
+class EditorTabWidget extends StatefulWidget {
   const EditorTabWidget({super.key});
+
+  @override
+  State<EditorTabWidget> createState() => _EditorTabWidgetState();
+}
+
+class _EditorTabWidgetState extends State<EditorTabWidget> {
+  bool _isTipVisible = false;
 
   @override
   Widget build(BuildContext context) {
@@ -19,6 +27,9 @@ class EditorTabWidget extends StatelessWidget {
           padding: EdgeInsets.all(16.w),
           child: Column(
             children: [
+              // Undo/Redo/Save toolbar card
+              _buildToolbarCard(context, state),
+              SizedBox(height: 32.h),
               // Speakers Card
               _buildSpeakersCard(context, state),
               SizedBox(height: 32.h),
@@ -63,14 +74,21 @@ class EditorTabWidget extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                Icon(
-                  Icons.help_outline,
-                  size: 20.sp,
-                  color: const Color(0xFF404040),
+                GestureDetector(
+                  onTap: () => setState(() => _isTipVisible = !_isTipVisible),
+                  child: Icon(
+                    Icons.help_outline,
+                    size: 20.sp,
+                    color: const Color(0xFF404040),
+                  ),
                 ),
               ],
             ),
           ),
+          if (_isTipVisible) ...[
+            SizedBox(height: 16.h),
+            _buildEditorGesturesTip(),
+          ],
           SizedBox(height: 16.h),
           // Speakers section
           Column(
@@ -137,7 +155,8 @@ class EditorTabWidget extends StatelessWidget {
                   children: speakers.asMap().entries.map((entry) {
                     final speaker = entry.value;
                     final speakerNumber = entry.key + 1;
-                    final color = _getSpeakerColor(speaker);
+                    final color = speakerColorOf(speaker);
+                    final badge = speakerBadgeLetterOf(speaker);
 
                     return Container(
                       padding: EdgeInsets.symmetric(
@@ -161,7 +180,7 @@ class EditorTabWidget extends StatelessWidget {
                             ),
                             child: Center(
                               child: Text(
-                                speaker,
+                                badge,
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 14.sp,
@@ -193,6 +212,80 @@ class EditorTabWidget extends StatelessWidget {
     );
   }
 
+  Widget _buildEditorGesturesTip() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+      decoration: BoxDecoration(
+        color: const Color(0xFF4A59FE).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10.r),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 20.sp,
+                color: const Color(0xFF4A59FE),
+              ),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: Text(
+                  'Editor Gestures',
+                  style: TextStyle(
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF4A59FE),
+                    letterSpacing: -0.31,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => setState(() => _isTipVisible = false),
+                child: Icon(
+                  Icons.close,
+                  size: 20.sp,
+                  color: const Color(0xFF4A59FE),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            'Tap to seek timestamp',
+            style: TextStyle(
+              fontSize: 16.sp,
+              fontWeight: FontWeight.w400,
+              color: Colors.black,
+              letterSpacing: -0.31,
+            ),
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            'Double-tap to edit word',
+            style: TextStyle(
+              fontSize: 16.sp,
+              fontWeight: FontWeight.w400,
+              color: Colors.black,
+              letterSpacing: -0.31,
+            ),
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            'Long-press for options',
+            style: TextStyle(
+              fontSize: 16.sp,
+              fontWeight: FontWeight.w400,
+              color: Colors.black,
+              letterSpacing: -0.31,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTranscriptEditorCard(
     BuildContext context,
     TranscriptDetailState state,
@@ -208,9 +301,6 @@ class EditorTabWidget extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Undo/Redo toolbar
-          _buildUndoRedoToolbar(context, state),
-          SizedBox(height: 24.h),
           // Utterances
           if (utterances.isEmpty)
             _buildEmptyState()
@@ -230,16 +320,16 @@ class EditorTabWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildUndoRedoToolbar(
+  Widget _buildToolbarCard(
     BuildContext context,
     TranscriptDetailState state,
   ) {
     return Container(
-      padding: EdgeInsets.only(bottom: 8.h),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFF2F2F7)),
-        ),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10.r),
+        border: Border.all(color: const Color(0xFFF2F2F7)),
       ),
       child: Row(
         children: [
@@ -367,18 +457,6 @@ class EditorTabWidget extends StatelessWidget {
     );
   }
 
-  Color _getSpeakerColor(String speaker) {
-    final colors = [
-      const Color(0xFF4A59FE), // Blue
-      const Color(0xFF10B981), // Green
-      const Color(0xFFF59E0B), // Orange
-      const Color(0xFFEF4444), // Red
-      const Color(0xFF8B5CF6), // Purple
-      const Color(0xFF06B6D4), // Cyan
-    ];
-    final index = speaker.codeUnitAt(0) - 'A'.codeUnitAt(0);
-    return colors[index.abs() % colors.length];
-  }
 }
 
 class _EditorUtteranceBlock extends StatelessWidget {
@@ -395,90 +473,145 @@ class _EditorUtteranceBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final speaker = utterance.speaker ?? 'A';
-    final speakerNumber = speaker.codeUnitAt(0) - 'A'.codeUnitAt(0) + 1;
-    final color = _getSpeakerColor(speaker);
+    final speakerNumber = speakerNumberOf(speaker);
+    final color = speakerColorOf(speaker);
+    final badge = speakerBadgeLetterOf(speaker);
+    final words = _resolveWords();
 
     return Container(
       padding: EdgeInsets.all(12.w),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F9FB),
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE5E7EB)),
         borderRadius: BorderRadius.circular(10.r),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: Avatar + Speaker Name | Timestamp
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Avatar + Speaker
-              GestureDetector(
-                onTap: () => _showSpeakerPicker(context),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32.w,
-                      height: 32.w,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          speaker,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14.sp,
-                            fontWeight: FontWeight.w600,
-                          ),
+          // Left column: avatar + speaker + timestamp (fixed width like web's w-24)
+          SizedBox(
+            width: 64.w,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  onTap: () => _showSpeakerPicker(context),
+                  child: Container(
+                    width: 40.w,
+                    height: 40.w,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        badge,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14.sp,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                    SizedBox(width: 8.w),
+                  ),
+                ),
+                SizedBox(height: 6.h),
+                GestureDetector(
+                  onTap: () => _showSpeakerPicker(context),
+                  child: Text(
+                    'Speaker $speakerNumber',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF4B5563),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 4.h),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.access_time,
+                      size: 11.sp,
+                      color: const Color(0xFF9CA3AF),
+                    ),
+                    SizedBox(width: 2.w),
                     Text(
-                      'Speaker $speakerNumber',
+                      utterance.formattedStart,
                       style: TextStyle(
-                        fontSize: 16.sp,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF333333),
-                        letterSpacing: -0.31,
+                        fontSize: 10.sp,
+                        fontWeight: FontWeight.w400,
+                        color: const Color(0xFF9CA3AF),
                       ),
                     ),
                   ],
                 ),
-              ),
-              // Timestamp
-              Text(
-                utterance.formattedStart,
-                style: TextStyle(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w400,
-                  color: const Color(0xFF999999),
-                  letterSpacing: -0.31,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-          SizedBox(height: 8.h),
-          // Tappable words
-          _buildTappableWords(context),
+          SizedBox(width: 12.w),
+          // Right column: tappable words flowing
+          Expanded(child: _buildTappableWords(context, words)),
         ],
       ),
     );
   }
 
-  Widget _buildTappableWords(BuildContext context) {
-    final words = utterance.words;
+  /// Returns the word list to render. Three-tier fallback so the UI always
+  /// shows tappable word spans (matching the web), regardless of which API
+  /// shape the selected transcription result was parsed from:
+  ///   1. utterance.words  (when present)
+  ///   2. top-level words filtered by utterance's time range
+  ///   3. split utterance.text on whitespace into synthetic WordEntities
+  List<WordEntities> _resolveWords() {
+    if (utterance.words.isNotEmpty) return utterance.words;
 
+    final allWords = state.displayWords;
+    final uStart = utterance.start;
+    final uEnd = utterance.end;
+    if (uStart != null && uEnd != null) {
+      final filtered = allWords.where((w) {
+        final ws = w.start;
+        return ws != null && ws >= uStart && ws <= uEnd;
+      }).toList();
+      if (filtered.isNotEmpty) return filtered;
+    }
+
+    final text = utterance.text;
+    if (text == null || text.trim().isEmpty) return const [];
+    return text
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .map((t) => WordEntities(
+              text: t,
+              start: uStart,
+              end: uEnd,
+              speaker: utterance.speaker,
+            ))
+        .toList();
+  }
+
+  Widget _buildTappableWords(BuildContext context, List<WordEntities> words) {
+    if (words.isEmpty) {
+      return Text(
+        utterance.text ?? '',
+        style: TextStyle(
+          fontSize: 14.sp,
+          fontWeight: FontWeight.w400,
+          color: const Color(0xFF1F2937),
+          height: 1.5,
+        ),
+      );
+    }
     return Wrap(
-      spacing: 0,
-      runSpacing: 0,
-      children: words.asMap().entries.map((entry) {
-        final localIndex = entry.key;
-        final word = entry.value;
-        final globalIndex = _getGlobalWordIndex(localIndex);
+      spacing: 2.w,
+      runSpacing: 2.h,
+      children: words.map((word) {
+        final globalIndex = _findGlobalIndex(word);
         final isCurrentWord = state.currentWordIndex == globalIndex;
-
         return _TappableWord(
           word: word,
           globalWordIndex: globalIndex,
@@ -488,17 +621,16 @@ class _EditorUtteranceBlock extends StatelessWidget {
     );
   }
 
-  int _getGlobalWordIndex(int localIndex) {
+  int _findGlobalIndex(WordEntities word) {
     final allWords = state.displayWords;
-    final word = utterance.words[localIndex];
-
     for (int i = 0; i < allWords.length; i++) {
       if (allWords[i].start == word.start && allWords[i].text == word.text) {
         return i;
       }
     }
-    return localIndex;
+    return 0;
   }
+
 
   void _showSpeakerPicker(BuildContext context) {
     showModalBottomSheet(
@@ -520,18 +652,6 @@ class _EditorUtteranceBlock extends StatelessWidget {
     );
   }
 
-  Color _getSpeakerColor(String speaker) {
-    final colors = [
-      const Color(0xFF4A59FE),
-      const Color(0xFF10B981),
-      const Color(0xFFF59E0B),
-      const Color(0xFFEF4444),
-      const Color(0xFF8B5CF6),
-      const Color(0xFF06B6D4),
-    ];
-    final index = speaker.codeUnitAt(0) - 'A'.codeUnitAt(0);
-    return colors[index.abs() % colors.length];
-  }
 }
 
 class _TappableWord extends StatelessWidget {
@@ -928,7 +1048,7 @@ class _SpeakerPickerSheet extends StatelessWidget {
               final speaker = entry.value;
               final speakerNumber = entry.key + 1;
               final isSelected = speaker == currentSpeaker;
-              final color = _getSpeakerColor(speaker);
+              final color = speakerColorOf(speaker);
 
               return GestureDetector(
                 onTap: () => onSpeakerSelected(speaker),
@@ -987,16 +1107,4 @@ class _SpeakerPickerSheet extends StatelessWidget {
     );
   }
 
-  Color _getSpeakerColor(String speaker) {
-    final colors = [
-      const Color(0xFF4A59FE),
-      const Color(0xFF10B981),
-      const Color(0xFFF59E0B),
-      const Color(0xFFEF4444),
-      const Color(0xFF8B5CF6),
-      const Color(0xFF06B6D4),
-    ];
-    final index = speaker.codeUnitAt(0) - 'A'.codeUnitAt(0);
-    return colors[index.abs() % colors.length];
-  }
 }

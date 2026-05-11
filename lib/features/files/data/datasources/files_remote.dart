@@ -20,9 +20,28 @@ class FilesRemoteServices {
     required int limit,
     String sortBy = 'createdAt',
     String sortOrder = 'DESC',
+    String? search,
+    String? source,
+    bool? isFavorite,
+    String? folderId,
   }) async {
+    final buf = StringBuffer(
+      '${ApiEndPoints.audioFiles}?page=$page&limit=$limit&sortBy=$sortBy&sortOrder=$sortOrder',
+    );
+    if (search != null && search.isNotEmpty) {
+      buf.write('&search=${Uri.encodeQueryComponent(search)}');
+    }
+    if (source != null && source.isNotEmpty) {
+      buf.write('&source=${Uri.encodeQueryComponent(source)}');
+    }
+    if (isFavorite != null) {
+      buf.write('&isFavorite=$isFavorite');
+    }
+    if (folderId != null && folderId.isNotEmpty) {
+      buf.write('&folderId=${Uri.encodeQueryComponent(folderId)}');
+    }
     final APIRequestParam param = APIRequestParam(
-      path: '${ApiEndPoints.audioFiles}?page=$page&limit=$limit&sortBy=$sortBy&sortOrder=$sortOrder',
+      path: buf.toString(),
       doCache: false,
       isRequiredAuth: true,
       options: Options(headers: {"Authorization": "Bearer $token"}),
@@ -43,6 +62,30 @@ class FilesRemoteServices {
             message: e.toString(),
           ));
         }
+      });
+    });
+  }
+
+  Future<Either<Failure, bool>> toggleFavorite({
+    required String token,
+    required String fileId,
+    required bool isFavorite,
+  }) async {
+    final APIRequestParam param = APIRequestParam(
+      path: ApiEndPoints.audioFileFavorite(fileId),
+      data: {"isFavorite": isFavorite},
+      doCache: false,
+      isRequiredAuth: true,
+      options: Options(headers: {"Authorization": "Bearer $token"}),
+    );
+    return await _dioClient.put(param).then((response) {
+      return response.fold((l) {
+        log("Toggle Favorite Error: ${l.response?.statusCode}");
+        log("Toggle Favorite Error Response: ${l.response?.data}");
+        return Left(ApiErrorGenerator.apiError(l));
+      }, (r) {
+        log("Toggle Favorite Response: ${r.data}");
+        return const Right(true);
       });
     });
   }

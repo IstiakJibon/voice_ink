@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:voice_ink/config/const/app/app_assets.dart';
+import 'package:voice_ink/config/di/dependency_injector.dart';
+import 'package:voice_ink/config/utilities/extensions/user_extension.dart';
+import 'package:voice_ink/features/files/presentation/cubit/export/export_cubit.dart';
+import 'package:voice_ink/features/files/presentation/cubit/export/export_state.dart';
 import 'package:voice_ink/features/home/presentation/widget/dashed_border_painter.dart';
 
 class ExportScreen extends StatefulWidget {
+  final String transcriptionResultId;
   final String fileName;
 
   const ExportScreen({
     super.key,
+    required this.transcriptionResultId,
     required this.fileName,
   });
 
@@ -18,68 +25,103 @@ class ExportScreen extends StatefulWidget {
 }
 
 class _ExportScreenState extends State<ExportScreen> {
+  static const Map<String, String> _languageCodes = {
+    'English': 'en',
+    'Spanish': 'es',
+    'French': 'fr',
+    'German': 'de',
+    'Japanese': 'ja',
+    'Chinese': 'zh',
+  };
+
   String _selectedFormat = 'PDF';
   bool _moreOptionsExpanded = true;
-  bool _translateTranscript = true;
-  String _selectedLanguage = 'Spanish';
+  bool _translateTranscript = false;
+  String _selectedLanguage = 'English';
 
-  // More options checkboxes
-  bool _includeTimestamps = true;
-  bool _includeSpeakerLabels = true;
-  bool _includeConfidenceScores = true;
-  bool _includeAudioHighlights = true;
+  bool _showSpeakerNames = true;
+  bool _showTimestamps = true;
+  bool _combineParagraphs = true;
+  bool _includeHighlights = false;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            _buildHeader(),
-            // Content
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(horizontal: 16.w),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    16.verticalSpace,
-                    // Transcript info
-                    _buildTranscriptInfo(),
-                    16.verticalSpace,
-                    // Preview button
-                    _buildPreviewButton(),
-                    40.verticalSpace,
-                    // File format
-                    _buildFileFormatSection(),
-                    22.verticalSpace,
-                    // More options
-                    _buildMoreOptionsSection(),
-                    16.verticalSpace,
-                    // Divider
-                    _buildDivider(),
-                    24.verticalSpace,
-                    // Translate transcript
-                    _buildTranslateSection(),
-                    40.verticalSpace,
-                    // Action buttons
-                    _buildActionButtons(),
-                    32.verticalSpace,
-                  ],
+    return BlocProvider<ExportCubit>(
+      create: (_) => sl<ExportCubit>(),
+      child: BlocConsumer<ExportCubit, ExportState>(
+        listener: (blocContext, state) {
+          if (state.status == ExportStatus.success) {
+            ScaffoldMessenger.of(blocContext).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Exported: ${state.savedFileName ?? ''}\n${state.savedFilePath ?? ''}',
+                ),
+                duration: const Duration(seconds: 8),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.r),
                 ),
               ),
+            );
+            Navigator.pop(blocContext);
+          }
+          if (state.status == ExportStatus.failure) {
+            ScaffoldMessenger.of(blocContext).showSnackBar(
+              SnackBar(
+                content: Text(state.errorMessage ?? 'Export failed'),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
+              ),
+            );
+          }
+        },
+        builder: (blocContext, state) {
+          final isLoading = state.status == ExportStatus.loading;
+          return Scaffold(
+            backgroundColor: Colors.white,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          16.verticalSpace,
+                          _buildTranscriptInfo(),
+                          16.verticalSpace,
+                          _buildPreviewButton(),
+                          40.verticalSpace,
+                          _buildFileFormatSection(),
+                          22.verticalSpace,
+                          _buildMoreOptionsSection(),
+                          16.verticalSpace,
+                          _buildDivider(),
+                          24.verticalSpace,
+                          _buildTranslateSection(),
+                          40.verticalSpace,
+                          _buildActionButtons(blocContext, isLoading),
+                          32.verticalSpace,
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
   Widget _buildHeader() {
     return Padding(
-      padding: EdgeInsets.only(right: 16.w, top: 5.h,bottom: 5.h),
+      padding: EdgeInsets.only(right: 16.w, top: 5.h, bottom: 5.h),
       child: Row(
         children: [
           GestureDetector(
@@ -118,7 +160,6 @@ class _ExportScreenState extends State<ExportScreen> {
               ),
             ),
           ),
-          // Spacer for centering
           SizedBox(width: 44.w),
         ],
       ),
@@ -154,51 +195,51 @@ class _ExportScreenState extends State<ExportScreen> {
     );
   }
 
-Widget _buildPreviewButton() {
-  return GestureDetector(
-    onTap: () {
-      // TODO: Preview functionality
-    },
-    child: CustomPaint(
-      painter: DashedBorderPainter(
-        color: const Color(0xff404040),
-        strokeWidth: 1.5,
-        dashWidth: 6,
-        dashSpace: 4,
-        borderRadius: 10.r,
-      ),
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(vertical: 12.h),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SvgPicture.asset(
-              AppAssets.eye,
-              width: 24.w,
-              height: 24.h,
-              colorFilter: const ColorFilter.mode(
-                Color(0xff404040),
-                BlendMode.srcIn,
+  Widget _buildPreviewButton() {
+    return GestureDetector(
+      onTap: () {
+        // TODO: Preview functionality
+      },
+      child: CustomPaint(
+        painter: DashedBorderPainter(
+          color: const Color(0xff404040),
+          strokeWidth: 1.5,
+          dashWidth: 6,
+          dashSpace: 4,
+          borderRadius: 10.r,
+        ),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(vertical: 12.h),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SvgPicture.asset(
+                AppAssets.eye,
+                width: 24.w,
+                height: 24.h,
+                colorFilter: const ColorFilter.mode(
+                  Color(0xff404040),
+                  BlendMode.srcIn,
+                ),
               ),
-            ),
-            8.horizontalSpace,
-            Text(
-              'Preview transcript',
-              style: GoogleFonts.dmSans(
-                fontWeight: FontWeight.w400,
-                fontSize: 15.sp,
-                height: 20 / 15,
-                letterSpacing: -0.23,
-                color: const Color(0xff333333),
+              8.horizontalSpace,
+              Text(
+                'Preview transcript',
+                style: GoogleFonts.dmSans(
+                  fontWeight: FontWeight.w400,
+                  fontSize: 15.sp,
+                  height: 20 / 15,
+                  letterSpacing: -0.23,
+                  color: const Color(0xff333333),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildFileFormatSection() {
     return Column(
@@ -270,7 +311,7 @@ Widget _buildPreviewButton() {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'More option',
+                'More options',
                 style: GoogleFonts.dmSans(
                   fontWeight: FontWeight.w400,
                   fontSize: 16.sp,
@@ -307,27 +348,27 @@ Widget _buildPreviewButton() {
             child: Column(
               children: [
                 _buildCheckboxOption(
-                  'Include timestamps',
-                  _includeTimestamps,
-                  (value) => setState(() => _includeTimestamps = value),
+                  'Show speaker names',
+                  _showSpeakerNames,
+                  (value) => setState(() => _showSpeakerNames = value),
                 ),
                 16.verticalSpace,
                 _buildCheckboxOption(
-                  'Include speaker labels',
-                  _includeSpeakerLabels,
-                  (value) => setState(() => _includeSpeakerLabels = value),
+                  'Show timestamps',
+                  _showTimestamps,
+                  (value) => setState(() => _showTimestamps = value),
                 ),
                 16.verticalSpace,
                 _buildCheckboxOption(
-                  'Include confidence scores (if available)',
-                  _includeConfidenceScores,
-                  (value) => setState(() => _includeConfidenceScores = value),
+                  'Combine paragraphs of the same speaker',
+                  _combineParagraphs,
+                  (value) => setState(() => _combineParagraphs = value),
                 ),
                 16.verticalSpace,
                 _buildCheckboxOption(
-                  'Include audio highlights',
-                  _includeAudioHighlights,
-                  (value) => setState(() => _includeAudioHighlights = value),
+                  'Include highlights',
+                  _includeHighlights,
+                  (value) => setState(() => _includeHighlights = value),
                 ),
               ],
             ),
@@ -400,7 +441,6 @@ Widget _buildPreviewButton() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Toggle row
         Row(
           children: [
             SvgPicture.asset(
@@ -462,7 +502,6 @@ Widget _buildPreviewButton() {
         ),
         if (_translateTranscript) ...[
           16.verticalSpace,
-          // Target language
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -483,7 +522,8 @@ Widget _buildPreviewButton() {
                 },
                 child: Container(
                   width: double.infinity,
-                  padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 12.h),
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 8.w, vertical: 12.h),
                   decoration: BoxDecoration(
                     border: Border.all(color: const Color(0xffF2F2F7)),
                     borderRadius: BorderRadius.circular(10.r),
@@ -517,7 +557,6 @@ Widget _buildPreviewButton() {
             ],
           ),
           24.verticalSpace,
-          // Info card
           Container(
             width: double.infinity,
             padding: EdgeInsets.all(16.w),
@@ -571,17 +610,13 @@ Widget _buildPreviewButton() {
     );
   }
 
-  Widget _buildActionButtons() {
+  Widget _buildActionButtons(BuildContext blocContext, bool isLoading) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 8.w),
       child: Column(
         children: [
-          // Export button
           GestureDetector(
-            onTap: () {
-              // TODO: Export functionality
-              Navigator.pop(context);
-            },
+            onTap: isLoading ? null : () => _onExportPressed(blocContext),
             child: Container(
               width: double.infinity,
               padding: EdgeInsets.symmetric(vertical: 12.h),
@@ -590,25 +625,31 @@ Widget _buildPreviewButton() {
                 borderRadius: BorderRadius.circular(10.r),
               ),
               child: Center(
-                child: Text(
-                  'Export',
-                  style: GoogleFonts.dmSans(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15.sp,
-                    height: 20 / 15,
-                    letterSpacing: -0.23,
-                    color: Colors.white,
-                  ),
-                ),
+                child: isLoading
+                    ? SizedBox(
+                        width: 20.w,
+                        height: 20.h,
+                        child: const CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        'Export',
+                        style: GoogleFonts.dmSans(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15.sp,
+                          height: 20 / 15,
+                          letterSpacing: -0.23,
+                          color: Colors.white,
+                        ),
+                      ),
               ),
             ),
           ),
           16.verticalSpace,
-          // Cancel button
           GestureDetector(
-            onTap: () {
-              Navigator.pop(context);
-            },
+            onTap: isLoading ? null : () => Navigator.pop(context),
             child: Container(
               width: double.infinity,
               padding: EdgeInsets.symmetric(vertical: 12.h),
@@ -632,6 +673,22 @@ Widget _buildPreviewButton() {
         ],
       ),
     );
+  }
+
+  void _onExportPressed(BuildContext blocContext) {
+    blocContext.read<ExportCubit>().exportTranscript(
+          transcriptionResultId: widget.transcriptionResultId,
+          originalFilename: widget.fileName,
+          format: _selectedFormat.toLowerCase(),
+          includeSpeakers: _showSpeakerNames,
+          includeTimestamps: _showTimestamps,
+          combineParagraphs: _combineParagraphs,
+          includeHighlights: _includeHighlights,
+          targetLanguage: _translateTranscript
+              ? _languageCodes[_selectedLanguage]
+              : null,
+          token: context.token,
+        );
   }
 
   void _showFormatPicker() {
@@ -691,18 +748,7 @@ Widget _buildPreviewButton() {
   }
 
   void _showLanguagePicker() {
-    final languages = [
-      'Spanish',
-      'French',
-      'German',
-      'Portuguese',
-      'Italian',
-      'Chinese',
-      'Japanese',
-      'Korean',
-      'Arabic',
-      'Hindi',
-    ];
+    final languages = _languageCodes.keys.toList();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,

@@ -14,6 +14,10 @@ class FilesUseCase {
     required int limit,
     String sortBy = 'createdAt',
     String sortOrder = 'DESC',
+    String? search,
+    String? source,
+    bool? isFavorite,
+    String? folderId,
   }) async {
     return await filesRepository.getAudioFiles(
       token: token,
@@ -21,6 +25,22 @@ class FilesUseCase {
       limit: limit,
       sortBy: sortBy,
       sortOrder: sortOrder,
+      search: search,
+      source: source,
+      isFavorite: isFavorite,
+      folderId: folderId,
+    );
+  }
+
+  Future<Either<Failure, bool>> toggleFavorite({
+    required String token,
+    required String fileId,
+    required bool isFavorite,
+  }) async {
+    return await filesRepository.toggleFavorite(
+      token: token,
+      fileId: fileId,
+      isFavorite: isFavorite,
     );
   }
 }

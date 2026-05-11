@@ -147,6 +147,7 @@ class DioClient implements ApiProvider {
       addAuthInterCeptor(_dio);
     }
     return await Task(() async => await _dio.put(param.path,
+        data: param.data,
         queryParameters: param.queryParameters,
         options: param.options)).attempt().run().then((either) {
       return either.fold((l) {

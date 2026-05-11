@@ -1,5 +1,21 @@
 import 'package:equatable/equatable.dart';
 
+// ==================== TRANSCRIPTION STATUS ====================
+class TranscriptionStatusEntities extends Equatable {
+  final String? status; // not_started | processing | completed | failed
+  final double? progress;
+  final String? error;
+
+  const TranscriptionStatusEntities({
+    this.status,
+    this.progress,
+    this.error,
+  });
+
+  @override
+  List<Object?> get props => [status, progress, error];
+}
+
 // ==================== STREAM URL ====================
 class StreamUrlEntities extends Equatable {
   final String? url;
@@ -230,6 +246,35 @@ class TranscriptionResultEntities extends Equatable {
     return speakerSet.toList()..sort();
   }
 
+  /// Merge consecutive utterances from the same speaker into one block.
+  /// Deepgram returns one utterance per sentence; AssemblyAI returns one
+  /// utterance per continuous speaker turn. Normalizing to the latter.
+  List<UtteranceEntities> get mergedUtterances {
+    if (utterances.length < 2) return utterances;
+    final result = <UtteranceEntities>[];
+    UtteranceEntities current = utterances.first;
+    for (int i = 1; i < utterances.length; i++) {
+      final next = utterances[i];
+      if (next.speaker == current.speaker) {
+        final mergedText =
+            '${current.text ?? ''} ${next.text ?? ''}'.trim();
+        current = UtteranceEntities(
+          speaker: current.speaker,
+          text: mergedText,
+          confidence: current.confidence,
+          start: current.start,
+          end: next.end ?? current.end,
+          words: [...current.words, ...next.words],
+        );
+      } else {
+        result.add(current);
+        current = next;
+      }
+    }
+    result.add(current);
+    return result;
+  }
+
   @override
   List<Object?> get props => [
         id,
@@ -402,6 +447,68 @@ class FileDetailEntities extends Equatable {
   });
 
   factory FileDetailEntities.empty() => const FileDetailEntities();
+
+  FileDetailEntities copyWith({
+    String? id,
+    String? path,
+    String? name,
+    String? originalFilename,
+    String? mimetype,
+    String? type,
+    String? status,
+    String? size,
+    int? duration,
+    String? audioFormat,
+    int? sampleRate,
+    int? channels,
+    int? bitrate,
+    String? description,
+    dynamic tags,
+    String? userId,
+    String? folderId,
+    String? source,
+    FileMetadataEntities? metadata,
+    String? errorMessage,
+    String? createdAt,
+    String? updatedAt,
+    String? deletedAt,
+    String? processedAt,
+    bool? isFavorite,
+    FileUserEntities? user,
+    String? transcriptionStatus,
+    TranscriptionResultEntities? transcriptionResult,
+  }) {
+    return FileDetailEntities(
+      id: id ?? this.id,
+      path: path ?? this.path,
+      name: name ?? this.name,
+      originalFilename: originalFilename ?? this.originalFilename,
+      mimetype: mimetype ?? this.mimetype,
+      type: type ?? this.type,
+      status: status ?? this.status,
+      size: size ?? this.size,
+      duration: duration ?? this.duration,
+      audioFormat: audioFormat ?? this.audioFormat,
+      sampleRate: sampleRate ?? this.sampleRate,
+      channels: channels ?? this.channels,
+      bitrate: bitrate ?? this.bitrate,
+      description: description ?? this.description,
+      tags: tags ?? this.tags,
+      userId: userId ?? this.userId,
+      folderId: folderId ?? this.folderId,
+      source: source ?? this.source,
+      metadata: metadata ?? this.metadata,
+      errorMessage: errorMessage ?? this.errorMessage,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      processedAt: processedAt ?? this.processedAt,
+      isFavorite: isFavorite ?? this.isFavorite,
+      user: user ?? this.user,
+      transcriptionStatus: transcriptionStatus ?? this.transcriptionStatus,
+      transcriptionResult: transcriptionResult ?? this.transcriptionResult,
+    );
+  }
 
   /// Formatted duration (MM:SS or HH:MM:SS)
   String get formattedDuration {

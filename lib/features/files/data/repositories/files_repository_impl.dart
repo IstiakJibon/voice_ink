@@ -16,6 +16,10 @@ class FilesRepositoryImpl extends FilesRepository {
     required int limit,
     String sortBy = 'createdAt',
     String sortOrder = 'DESC',
+    String? search,
+    String? source,
+    bool? isFavorite,
+    String? folderId,
   }) async {
     return await filesRemoteServices.getAudioFiles(
       token: token,
@@ -23,6 +27,23 @@ class FilesRepositoryImpl extends FilesRepository {
       limit: limit,
       sortBy: sortBy,
       sortOrder: sortOrder,
+      search: search,
+      source: source,
+      isFavorite: isFavorite,
+      folderId: folderId,
+    );
+  }
+
+  @override
+  Future<Either<Failure, bool>> toggleFavorite({
+    required String token,
+    required String fileId,
+    required bool isFavorite,
+  }) async {
+    return await filesRemoteServices.toggleFavorite(
+      token: token,
+      fileId: fileId,
+      isFavorite: isFavorite,
     );
   }
 }

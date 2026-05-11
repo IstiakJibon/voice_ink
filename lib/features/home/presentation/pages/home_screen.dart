@@ -7,7 +7,6 @@ import 'package:voice_ink/features/home/presentation/widget/engine_popup.dart';
 import 'package:voice_ink/features/home/presentation/widget/import_option_tile.dart';
 import 'package:voice_ink/features/home/presentation/widget/language_popup.dart';
 import 'package:voice_ink/features/home/presentation/widget/notification_popup.dart';
-import 'package:voice_ink/features/home/presentation/widget/recent_file_tile.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -155,39 +154,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             8.verticalSpace,
             const ImportOptionsCard(),
-            32.verticalSpace,
-
-            Row(
-              crossAxisAlignment: .center,
-              mainAxisAlignment: .spaceBetween,
-              children: [
-                Text(
-                  'Import Content',
-                  style: GoogleFonts.dmSans(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 16.sp,
-                    height: 18 / 16,
-                    letterSpacing: -0.08,
-                    color: const Color(0xff000000),
-                  ),
-                ),
-
-                Text(
-                  'See all',
-                  style: GoogleFonts.dmSans(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 16.sp,
-                    height: 18 / 16,
-                    letterSpacing: -0.08,
-                    color: const Color(0xff8E8E93),
-                  ),
-                ),
-              ],
-            ),
-
-            16.verticalSpace,
-
-            const RecentFilesCard(),
           ],
         ),
       ),

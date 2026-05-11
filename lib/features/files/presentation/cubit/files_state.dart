@@ -2,6 +2,8 @@ import 'package:equatable/equatable.dart';
 import 'package:voice_ink/config/utilities/enum/bloc_api_state.dart';
 import 'package:voice_ink/features/files/domain/entities/audio_file_entities.dart';
 
+enum FilesFilter { all, uploads, favorites, imported }
+
 class FilesState extends Equatable {
   final NormalApiState apiState;
   final AudioFileListEntities audioFiles;
@@ -11,6 +13,9 @@ class FilesState extends Equatable {
   final bool isLoadingMore;
   final String sortBy;
   final String sortOrder;
+  final String searchQuery;
+  final FilesFilter filter;
+  final String? folderId;
 
   const FilesState({
     required this.apiState,
@@ -21,9 +26,29 @@ class FilesState extends Equatable {
     required this.isLoadingMore,
     required this.sortBy,
     required this.sortOrder,
+    this.searchQuery = '',
+    this.filter = FilesFilter.all,
+    this.folderId,
   });
 
-  /// Group files by date (TODAY, YESTERDAY, OLDER)
+  /// Server-side filter query params for the current filter chip
+  String? get filterSourceParam {
+    switch (filter) {
+      case FilesFilter.uploads:
+        return 'upload';
+      case FilesFilter.imported:
+        return 'url';
+      case FilesFilter.all:
+      case FilesFilter.favorites:
+        return null;
+    }
+  }
+
+  bool? get filterFavoriteParam =>
+      filter == FilesFilter.favorites ? true : null;
+
+  /// Group files by date (TODAY, YESTERDAY, OLDER). Server already filters,
+  /// so allFiles is the visible set.
   Map<String, List<AudioFileEntity>> get groupedFiles {
     final Map<String, List<AudioFileEntity>> grouped = {
       'TODAY': [],
@@ -52,6 +77,9 @@ class FilesState extends Equatable {
         isLoadingMore,
         sortBy,
         sortOrder,
+        searchQuery,
+        filter,
+        folderId,
       ];
 
   FilesState copyWith({
@@ -63,6 +91,10 @@ class FilesState extends Equatable {
     bool? isLoadingMore,
     String? sortBy,
     String? sortOrder,
+    String? searchQuery,
+    FilesFilter? filter,
+    String? folderId,
+    bool clearFolderId = false,
   }) {
     return FilesState(
       apiState: apiState ?? this.apiState,
@@ -73,6 +105,9 @@ class FilesState extends Equatable {
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       sortBy: sortBy ?? this.sortBy,
       sortOrder: sortOrder ?? this.sortOrder,
+      searchQuery: searchQuery ?? this.searchQuery,
+      filter: filter ?? this.filter,
+      folderId: clearFolderId ? null : (folderId ?? this.folderId),
     );
   }
 }

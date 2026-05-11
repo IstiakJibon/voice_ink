@@ -23,6 +23,9 @@ class TranscriptDetailCubit extends Cubit<TranscriptDetailState> {
   final GetFileDetailUseCase getFileDetailUseCase;
   final GetStreamUrlUseCase getStreamUrlUseCase;
   final GetTranscriptionResultsUseCase getTranscriptionResultsUseCase;
+  final GetTranscriptionResultDetailUseCase getTranscriptionResultDetailUseCase;
+  final DeleteTranscriptionResultUseCase deleteTranscriptionResultUseCase;
+  final SetPrimaryTranscriptionResultUseCase setPrimaryTranscriptionResultUseCase;
   final UpdateWordTextUseCase updateWordTextUseCase;
   final UpdateWordSpeakerUseCase updateWordSpeakerUseCase;
 
@@ -34,10 +37,17 @@ class TranscriptDetailCubit extends Cubit<TranscriptDetailState> {
   String? _currentFileId;
   String? _currentToken;
 
+  Timer? _transcriptionPollTimer;
+  int _pollAttempts = 0;
+  static const int _maxPollAttempts = 60; // 60 × 5s = 5 min
+
   TranscriptDetailCubit({
     required this.getFileDetailUseCase,
     required this.getStreamUrlUseCase,
     required this.getTranscriptionResultsUseCase,
+    required this.getTranscriptionResultDetailUseCase,
+    required this.deleteTranscriptionResultUseCase,
+    required this.setPrimaryTranscriptionResultUseCase,
     required this.updateWordTextUseCase,
     required this.updateWordSpeakerUseCase,
   }) : super(const TranscriptDetailState()) {
@@ -91,12 +101,62 @@ class TranscriptDetailCubit extends Cubit<TranscriptDetailState> {
 
   // ==================== LOAD DATA ====================
 
+  /// Begin polling the file detail every 5s until a transcription result
+  /// arrives or the file's status reaches a terminal state. Used after
+  /// upload-with-auto-transcribe so the user sees the transcript appear
+  /// without manually refreshing.
+  void startTranscriptionPolling() {
+    _transcriptionPollTimer?.cancel();
+    _pollAttempts = 0;
+    _transcriptionPollTimer =
+        Timer.periodic(const Duration(seconds: 5), (timer) async {
+      if (isClosed) {
+        timer.cancel();
+        return;
+      }
+      _pollAttempts++;
+      final fileId = _currentFileId;
+      final token = _currentToken;
+      if (fileId == null || token == null) {
+        timer.cancel();
+        return;
+      }
+
+      // Stop if we already have a transcription result, the file failed,
+      // or we've hit the cap.
+      final hasResult = state.fileDetail.transcriptionResult != null;
+      final status = state.fileDetail.transcriptionStatus;
+      final terminal =
+          status == 'completed' || status == 'failed' || hasResult;
+      if (terminal || _pollAttempts > _maxPollAttempts) {
+        timer.cancel();
+        return;
+      }
+
+      // Silent re-fetch: refresh file detail + results list without
+      // flipping the top-level status back to loading.
+      final fileRes =
+          await getFileDetailUseCase.call(fileId: fileId, token: token);
+      if (isClosed) return;
+      fileRes.fold((_) {}, (fileDetail) {
+        emit(state.copyWith(fileDetail: fileDetail));
+      });
+      await _loadResultsList(fileId: fileId, token: token);
+    });
+  }
+
+  void _stopTranscriptionPolling() {
+    _transcriptionPollTimer?.cancel();
+    _transcriptionPollTimer = null;
+  }
+
   Future<void> loadFileDetail({
     required String fileId,
     required String token,
   }) async {
     _currentFileId = fileId;
     _currentToken = token;
+    _stopTranscriptionPolling();
 
     emit(state.copyWith(status: TranscriptDetailStatus.loading));
 
@@ -118,9 +178,149 @@ class TranscriptDetailCubit extends Cubit<TranscriptDetailState> {
           status: TranscriptDetailStatus.loaded,
           fileDetail: fileDetail,
           editedWords: editedWords,
+          selectedResultId: fileDetail.transcriptionResult?.id,
+          // Reset to false so the transcript tab waits for the list before
+          // deciding between Ready view and transcript view.
+          resultsListLoaded: false,
         ));
 
         _loadStreamUrl(fileId: fileId, token: token);
+        _loadResultsList(fileId: fileId, token: token);
+      },
+    );
+  }
+
+  Future<void> _loadResultsList({
+    required String fileId,
+    required String token,
+  }) async {
+    final result = await getTranscriptionResultsUseCase.call(
+      fileId: fileId,
+      token: token,
+    );
+    if (isClosed) return;
+    result.fold(
+      (error) {
+        debugPrint('Failed to load transcription results list: $error');
+        // Even on failure, mark the list as loaded so the UI can decide
+        // (otherwise it'd hang on a loader forever).
+        emit(state.copyWith(resultsListLoaded: true));
+      },
+      (list) {
+        emit(state.copyWith(
+          transcriptionResultsMeta: list,
+          resultsListLoaded: true,
+        ));
+
+        // If the file detail came back with no primary transcriptionResult
+        // (server hasn't picked one) but the list has at least one result,
+        // auto-select the first one so the transcript view can render.
+        final hasPrimary = state.fileDetail.transcriptionResult != null;
+        if (!hasPrimary && list.results.isNotEmpty) {
+          final preferredId =
+              list.primaryResultId ?? list.results.first.id;
+          if (preferredId != null && preferredId.isNotEmpty) {
+            selectTranscriptionResult(resultId: preferredId);
+          }
+        }
+      },
+    );
+  }
+
+  Future<void> selectTranscriptionResult({
+    required String resultId,
+  }) async {
+    if (state.selectedResultId == resultId) return;
+    final token = _currentToken;
+    if (token == null) return;
+
+    emit(state.copyWith(
+      isSwitchingResult: true,
+      selectedResultId: resultId,
+    ));
+
+    final result = await getTranscriptionResultDetailUseCase.call(
+      resultId: resultId,
+      token: token,
+    );
+    if (isClosed) return;
+
+    result.fold(
+      (error) {
+        emit(state.copyWith(
+          isSwitchingResult: false,
+          errorMessage: error,
+        ));
+      },
+      (newResult) {
+        final newFileDetail = state.fileDetail.copyWith(
+          transcriptionResult: newResult,
+        );
+        emit(state.copyWith(
+          fileDetail: newFileDetail,
+          editedWords: List<WordEntities>.from(newResult.words),
+          isSwitchingResult: false,
+        ));
+      },
+    );
+  }
+
+  Future<bool> deleteTranscriptionResult({required String resultId}) async {
+    final token = _currentToken;
+    final fileId = _currentFileId;
+    if (token == null || fileId == null) return false;
+
+    emit(state.copyWith(isSwitchingResult: true));
+
+    final result = await deleteTranscriptionResultUseCase.call(
+      resultId: resultId,
+      token: token,
+    );
+    if (isClosed) return false;
+
+    return await result.fold(
+      (error) async {
+        emit(state.copyWith(
+          isSwitchingResult: false,
+          errorMessage: error,
+        ));
+        return false;
+      },
+      (_) async {
+        emit(state.copyWith(isSwitchingResult: false));
+        await loadFileDetail(fileId: fileId, token: token);
+        return true;
+      },
+    );
+  }
+
+  Future<bool> setPrimaryTranscriptionResult({
+    required String resultId,
+  }) async {
+    final token = _currentToken;
+    final fileId = _currentFileId;
+    if (token == null || fileId == null) return false;
+
+    emit(state.copyWith(isSwitchingResult: true));
+
+    final result = await setPrimaryTranscriptionResultUseCase.call(
+      resultId: resultId,
+      token: token,
+    );
+    if (isClosed) return false;
+
+    return await result.fold(
+      (error) async {
+        emit(state.copyWith(
+          isSwitchingResult: false,
+          errorMessage: error,
+        ));
+        return false;
+      },
+      (_) async {
+        emit(state.copyWith(isSwitchingResult: false));
+        await loadFileDetail(fileId: fileId, token: token);
+        return true;
       },
     );
   }
@@ -491,6 +691,7 @@ class TranscriptDetailCubit extends Cubit<TranscriptDetailState> {
 
   @override
   Future<void> close() async {
+    _stopTranscriptionPolling();
     await _positionSubscription?.cancel();
     await _durationSubscription?.cancel();
     await _playerStateSubscription?.cancel();

@@ -8,7 +8,11 @@ import 'package:voice_ink/features/auth/presentation/cubit/login/login_cubit.dar
 import 'package:voice_ink/features/auth/presentation/cubit/registation/registation_cubit.dart';
 import 'package:voice_ink/features/auth/presentation/cubit/reset_password/reset_password_cubit.dart';
 import 'package:voice_ink/features/files/presentation/cubit/files_cubit.dart';
+import 'package:voice_ink/features/files/presentation/cubit/re_transcribe/re_transcribe_cubit.dart';
 import 'package:voice_ink/features/files/presentation/cubit/transcript_details/transcript_detail_cubit.dart';
+import 'package:voice_ink/features/folder/presentation/cubit/folder_cubit.dart';
+import 'package:voice_ink/features/quota/presentation/cubit/quota_cubit.dart';
+import 'package:voice_ink/features/upload/presentation/cubit/upload_cubit.dart';
 
 class StateManagementProviders {
   static List<SingleChildWidget> providers = [
@@ -20,7 +24,9 @@ class StateManagementProviders {
     BlocProvider(create: (context) => sl<ResetPasswordCubit>()),
     BlocProvider(create: (context) => sl<FilesCubit>()),
     BlocProvider(create: (context) => sl<TranscriptDetailCubit>()),
-
-
+    BlocProvider(create: (context) => sl<ReTranscribeCubit>()),
+    BlocProvider(create: (context) => sl<QuotaCubit>()),
+    BlocProvider(create: (context) => sl<FolderCubit>()),
+    BlocProvider(create: (context) => sl<UploadCubit>()),
   ];
 }

@@ -24,8 +24,8 @@ class SignInScreen extends StatefulWidget {
 
 class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController(text: 'istiakhossainjibon@gmail.com');
+  final TextEditingController _passwordController = TextEditingController(text: 'ghostjibon');
   bool _rememberMe = false;
 
   String? _validateEmail(String? value) {

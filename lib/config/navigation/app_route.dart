@@ -43,8 +43,11 @@ class AppRouter {
           settings: settings,
         );
             case RouteName.homeNavBar:
+        final initialIndex = settings.arguments is int
+            ? settings.arguments as int
+            : 0;
         return MaterialPageRoute(
-          builder: (_) => const HomeNavbar(),
+          builder: (_) => HomeNavbar(initialIndex: initialIndex),
           settings: settings,
         );
             case RouteName.home:

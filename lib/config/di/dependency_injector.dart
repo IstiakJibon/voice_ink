@@ -18,8 +18,25 @@ import 'package:voice_ink/features/files/domain/repositories/files_repository.da
 import 'package:voice_ink/features/files/domain/repositories/transcript_detail_repository.dart';
 import 'package:voice_ink/features/files/domain/usecases/files_usecase.dart';
 import 'package:voice_ink/features/files/domain/usecases/transcript_detail_usecase.dart';
+import 'package:voice_ink/features/files/presentation/cubit/export/export_cubit.dart';
 import 'package:voice_ink/features/files/presentation/cubit/files_cubit.dart';
+import 'package:voice_ink/features/files/presentation/cubit/re_transcribe/re_transcribe_cubit.dart';
 import 'package:voice_ink/features/files/presentation/cubit/transcript_details/transcript_detail_cubit.dart';
+import 'package:voice_ink/features/folder/data/datasources/folder_remote.dart';
+import 'package:voice_ink/features/folder/data/repositories/folder_repository_impl.dart';
+import 'package:voice_ink/features/folder/domain/repositories/folder_repository.dart';
+import 'package:voice_ink/features/folder/domain/usecases/folder_usecase.dart';
+import 'package:voice_ink/features/folder/presentation/cubit/folder_cubit.dart';
+import 'package:voice_ink/features/quota/data/datasources/quota_remote.dart';
+import 'package:voice_ink/features/quota/data/repositories/quota_repository_impl.dart';
+import 'package:voice_ink/features/quota/domain/repositories/quota_repository.dart';
+import 'package:voice_ink/features/quota/domain/usecases/quota_usecase.dart';
+import 'package:voice_ink/features/quota/presentation/cubit/quota_cubit.dart';
+import 'package:voice_ink/features/upload/data/datasources/upload_remote.dart';
+import 'package:voice_ink/features/upload/data/repositories/upload_repository_impl.dart';
+import 'package:voice_ink/features/upload/domain/repositories/upload_repository.dart';
+import 'package:voice_ink/features/upload/domain/usecases/upload_usecase.dart';
+import 'package:voice_ink/features/upload/presentation/cubit/upload_cubit.dart';
 
 final GetIt sl = GetIt.instance;
 
@@ -29,6 +46,11 @@ Future<void> configureDependencies() async {
   await _auth();
   await _files();
   await _transcriptDetail();
+  await _export();
+  await _reTranscribe();
+  await _quota();
+  await _folder();
+  await _upload();
 }
 
 Future<void> _appTheme() async {
@@ -85,11 +107,14 @@ Future<void> _transcriptDetail() async {
       getFileDetailUseCase: sl(),
       getStreamUrlUseCase: sl(),
       getTranscriptionResultsUseCase: sl(),
+      getTranscriptionResultDetailUseCase: sl(),
+      deleteTranscriptionResultUseCase: sl(),
+      setPrimaryTranscriptionResultUseCase: sl(),
       updateWordTextUseCase: sl(),
       updateWordSpeakerUseCase: sl(),
     ),
   );
- 
+
   // Use-cases
   sl.registerLazySingleton(
     () => GetFileDetailUseCase(repository: sl()),
@@ -99,6 +124,15 @@ Future<void> _transcriptDetail() async {
   );
   sl.registerLazySingleton(
     () => GetTranscriptionResultsUseCase(repository: sl()),
+  );
+  sl.registerLazySingleton(
+    () => GetTranscriptionResultDetailUseCase(repository: sl()),
+  );
+  sl.registerLazySingleton(
+    () => DeleteTranscriptionResultUseCase(repository: sl()),
+  );
+  sl.registerLazySingleton(
+    () => SetPrimaryTranscriptionResultUseCase(repository: sl()),
   );
   sl.registerLazySingleton(
     () => UpdateWordTextUseCase(repository: sl()),
@@ -116,4 +150,79 @@ Future<void> _transcriptDetail() async {
   sl.registerLazySingleton<TranscriptDetailRemoteDataSource>(
     () => TranscriptDetailRemoteDataSourceImpl(dioClient: sl()),
   );
+}
+
+Future<void> _export() async {
+  // Cubit
+  sl.registerFactory<ExportCubit>(
+    () => ExportCubit(exportTranscriptUseCase: sl()),
+  );
+
+  // Use-case
+  sl.registerLazySingleton(
+    () => ExportTranscriptUseCase(repository: sl()),
+  );
+}
+
+Future<void> _reTranscribe() async {
+  // Cubit
+  sl.registerFactory<ReTranscribeCubit>(
+    () => ReTranscribeCubit(
+      transcribeFileUseCase: sl(),
+      getTranscriptionStatusUseCase: sl(),
+    ),
+  );
+
+  // Use-cases
+  sl.registerLazySingleton(
+    () => TranscribeFileUseCase(repository: sl()),
+  );
+  sl.registerLazySingleton(
+    () => GetTranscriptionStatusUseCase(repository: sl()),
+  );
+}
+
+Future<void> _quota() async {
+  // Cubit
+  sl.registerFactory<QuotaCubit>(() => QuotaCubit(quotaUseCase: sl()));
+
+  // Use-case
+  sl.registerLazySingleton(() => QuotaUseCase(quotaRepository: sl()));
+
+  // Repository
+  sl.registerLazySingleton<QuotaRepository>(
+      () => QuotaRepositoryImpl(quotaRemoteServices: sl()));
+
+  // Data sources
+  sl.registerLazySingleton(() => QuotaRemoteServices());
+}
+
+Future<void> _folder() async {
+  // Cubit
+  sl.registerFactory<FolderCubit>(() => FolderCubit(folderUseCase: sl()));
+
+  // Use-case
+  sl.registerLazySingleton(() => FolderUseCase(folderRepository: sl()));
+
+  // Repository
+  sl.registerLazySingleton<FolderRepository>(
+      () => FolderRepositoryImpl(folderRemoteServices: sl()));
+
+  // Data sources
+  sl.registerLazySingleton(() => FolderRemoteServices());
+}
+
+Future<void> _upload() async {
+  // Cubit
+  sl.registerFactory<UploadCubit>(() => UploadCubit(uploadUseCase: sl()));
+
+  // Use-case
+  sl.registerLazySingleton(() => UploadUseCase(uploadRepository: sl()));
+
+  // Repository
+  sl.registerLazySingleton<UploadRepository>(
+      () => UploadRepositoryImpl(uploadRemoteServices: sl()));
+
+  // Data sources
+  sl.registerLazySingleton(() => UploadRemoteServices());
 }

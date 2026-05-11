@@ -1,14 +1,19 @@
 // lib/features/home/presentation/pages/upload_files_screen.dart
 
-import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:voice_ink/config/const/app/app_assets.dart';
+import 'package:voice_ink/config/navigation/route_name.dart';
+import 'package:voice_ink/config/utilities/extensions/user_extension.dart';
+import 'package:voice_ink/features/files/presentation/cubit/files_cubit.dart';
 import 'package:voice_ink/features/files/presentation/pages/transcript_detail_screen.dart';
-import 'package:voice_ink/features/home/presentation/widget/transcription_progress_dialog.dart';
+import 'package:voice_ink/features/upload/domain/entities/upload_entity.dart';
+import 'package:voice_ink/features/upload/presentation/cubit/upload_cubit.dart';
+import 'package:voice_ink/features/upload/presentation/cubit/upload_state.dart';
 
 class AdvancedFeature {
   final String id;
@@ -30,22 +35,23 @@ class AdvancedFeature {
   });
 }
 
-class UploadedFile {
-  final String id;
-  final String name;
-  double uploadProgress;
-  bool isUploaded;
-  bool isTranscribed;
-  Timer? uploadTimer;
-
-  UploadedFile({
-    required this.id,
-    required this.name,
-    this.uploadProgress = 0,
-    this.isUploaded = false,
-    this.isTranscribed = false,
-    this.uploadTimer,
-  });
+String _mimeFromExtension(String? ext) {
+  switch (ext?.toLowerCase()) {
+    case 'mp3':
+      return 'audio/mpeg';
+    case 'wav':
+      return 'audio/wav';
+    case 'm4a':
+      return 'audio/mp4';
+    case 'mp4':
+      return 'video/mp4';
+    case 'mov':
+      return 'video/quicktime';
+    case 'avi':
+      return 'video/x-msvideo';
+    default:
+      return 'application/octet-stream';
+  }
 }
 
 class UploadFilesScreen extends StatefulWidget {
@@ -58,7 +64,7 @@ class UploadFilesScreen extends StatefulWidget {
 class _UploadFilesScreenState extends State<UploadFilesScreen> {
   bool _autoTranscription = false;
   bool _advancedFeaturesExpanded = true;
-  final List<UploadedFile> _uploadedFiles = [];
+  bool _hasHandledCompletion = false;
 
   final List<AdvancedFeature> _features = [
     AdvancedFeature(
@@ -121,104 +127,92 @@ class _UploadFilesScreenState extends State<UploadFilesScreen> {
   ];
 
   @override
-  void dispose() {
-    for (var file in _uploadedFiles) {
-      file.uploadTimer?.cancel();
-    }
-    super.dispose();
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<UploadCubit>().reset();
+    });
   }
 
-  void _pickFiles() async {
+  Future<void> _pickFiles() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['mp3', 'wav', 'm4a', 'mp4', 'mov', 'avi'],
       allowMultiple: true,
+      withReadStream: false,
     );
+    if (result == null || result.files.isEmpty || !mounted) return;
 
-    if (result != null && result.files.isNotEmpty) {
-      for (var file in result.files) {
-        final uploadedFile = UploadedFile(
-          id: DateTime.now().millisecondsSinceEpoch.toString() + file.name,
-          name: file.name,
-        );
-        setState(() {
-          _uploadedFiles.add(uploadedFile);
-        });
-        _startUploadSimulation(uploadedFile);
-      }
+    final items = <UploadItem>[];
+    for (final f in result.files) {
+      if (f.path == null) continue;
+      items.add(UploadItem(
+        localId: '${DateTime.now().microsecondsSinceEpoch}-${f.name}',
+        name: f.name,
+        size: f.size,
+        localPath: f.path!,
+        contentType: _mimeFromExtension(f.extension),
+      ));
     }
+    if (items.isEmpty) return;
+
+    final uploadCubit = context.read<UploadCubit>();
+    uploadCubit.addFiles(items);
+    _hasHandledCompletion = false;
+    await uploadCubit.startBatchUpload(
+      token: context.token,
+      autoTranscribe: _autoTranscription,
+    );
   }
 
-  void _startUploadSimulation(UploadedFile file) {
-    const totalDuration = 3000;
-    const interval = 30;
-    const steps = totalDuration ~/ interval;
-    int currentStep = 0;
+  void _onUploadComplete() {
+    if (_hasHandledCompletion || !mounted) return;
+    _hasHandledCompletion = true;
 
-    file.uploadTimer = Timer.periodic(const Duration(milliseconds: 30), (timer) {
-      currentStep++;
-      setState(() {
-        file.uploadProgress = (currentStep / steps).clamp(0.0, 1.0);
-      });
+    // Pick the first successfully uploaded file to open in detail.
+    final uploadState = context.read<UploadCubit>().state;
+    final firstDone = uploadState.items.firstWhere(
+      (i) => i.stage == UploadStage.done && i.fileId != null,
+      orElse: () => uploadState.items.isNotEmpty
+          ? uploadState.items.first
+          : const UploadItem(
+              localId: '',
+              name: '',
+              size: 0,
+              localPath: '',
+              contentType: '',
+            ),
+    );
+    final fileId = firstDone.fileId;
 
-      if (currentStep >= steps) {
-        timer.cancel();
-        setState(() {
-          file.isUploaded = true;
-        });
+    // Refresh the Files list so the new uploads show up immediately.
+    context.read<FilesCubit>().refreshFiles();
 
-        if (_autoTranscription) {
-          _startTranscription(file);
-        }
-      }
-    });
-  }
-
-  void _startTranscription(UploadedFile file) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: const Color.fromRGBO(41, 41, 58, 0.23),
-      builder: (context) => TranscriptionProgressDialog(
-        fileName: file.name,
-        onComplete: () {
-          Navigator.pop(context);
-          setState(() {
-            file.isTranscribed = true;
-          });
-          _navigateToTranscriptDetail(file);
-        },
-        onBackgroundTap: () {
-          Navigator.pop(context);
-        },
+    final navigator = Navigator.of(context);
+    // Replace the stack with HomeNavbar on the Files tab; pressing back from
+    // the detail screen lands the user on the Files tab.
+    navigator.pushNamedAndRemoveUntil(
+      RouteName.homeNavBar,
+      (route) => false,
+      arguments: 1,
+    );
+    if (fileId == null || fileId.isEmpty) return;
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => TranscriptDetailScreen(
+          fileId: fileId,
+          autoTranscribeOnArrival: _autoTranscription,
+        ),
       ),
     );
   }
 
-  void _navigateToTranscriptDetail(UploadedFile file) {
-    // Navigator.push(
-    //   context,
-    //   MaterialPageRoute(
-    //     builder: (_) => TranscriptDetailScreen(
-    //       fileName: file.name,
-    //       date: 'Dec 31, 2025',
-    //       duration: '0:32',
-    //     ),
-    //   ),
-    // );
-  }
-
-  void _onFileTap(UploadedFile file) {
-    if (file.isUploaded && !file.isTranscribed) {
-      _startTranscription(file);
-    } else if (file.isTranscribed) {
-      _navigateToTranscriptDetail(file);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return BlocListener<UploadCubit, UploadState>(
+      listenWhen: (prev, curr) => !prev.allDone && curr.allDone,
+      listener: (context, state) => _onUploadComplete(),
+      child: Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Column(
@@ -280,10 +274,17 @@ class _UploadFilesScreenState extends State<UploadFilesScreen> {
                     8.verticalSpace,
                     _buildUploadArea(),
                     22.verticalSpace,
-                    if (_uploadedFiles.isNotEmpty) ...[
-                      _buildFileProgressList(),
-                      22.verticalSpace,
-                    ],
+                    BlocBuilder<UploadCubit, UploadState>(
+                      buildWhen: (prev, curr) =>
+                          prev.hasItems != curr.hasItems,
+                      builder: (context, state) {
+                        if (!state.hasItems) return const SizedBox.shrink();
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: 22.h),
+                          child: _buildFileProgressList(),
+                        );
+                      },
+                    ),
                     _buildTranscriptionCard(),
                     32.verticalSpace,
                   ],
@@ -293,6 +294,7 @@ class _UploadFilesScreenState extends State<UploadFilesScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -377,118 +379,160 @@ class _UploadFilesScreenState extends State<UploadFilesScreen> {
           ),
         ),
         8.verticalSpace,
-        ...List.generate(_uploadedFiles.length, (index) {
-          final file = _uploadedFiles[index];
-          return Padding(
-            padding: EdgeInsets.only(bottom: index < _uploadedFiles.length - 1 ? 12.h : 0),
-            child: _buildFileProgressItem(file),
-          );
-        }),
+        BlocBuilder<UploadCubit, UploadState>(
+          builder: (context, state) {
+            return Column(
+              children: List.generate(state.items.length, (index) {
+                final item = state.items[index];
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index < state.items.length - 1 ? 12.h : 0,
+                  ),
+                  child: _buildFileProgressItem(item),
+                );
+              }),
+            );
+          },
+        ),
       ],
     );
   }
 
-  Widget _buildFileProgressItem(UploadedFile file) {
-    return GestureDetector(
-      onTap: () => _onFileTap(file),
-      child: Container(
-        padding: EdgeInsets.all(12.w),
-        decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xffF2F2F7)),
-          borderRadius: BorderRadius.circular(16.r),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44.w,
-              height: 44.h,
-              decoration: BoxDecoration(
-                color: const Color(0xffECF4FE),
-                border: Border.all(
-                  color: const Color(0xff4A59FE),
-                  width: 1.5,
-                  strokeAlign: BorderSide.strokeAlignInside,
-                ),
-                borderRadius: BorderRadius.circular(10.r),
+  String _itemStatusLabel(UploadItem item) {
+    switch (item.stage) {
+      case UploadStage.pending:
+        return 'Pending';
+      case UploadStage.presigning:
+        return 'Preparing…';
+      case UploadStage.uploading:
+        return '${(item.progress * 100).toInt()}%';
+      case UploadStage.completing:
+        return 'Finalizing…';
+      case UploadStage.done:
+        return 'Done';
+      case UploadStage.failed:
+        return 'Failed';
+    }
+  }
+
+  Color _itemStatusColor(UploadItem item) {
+    switch (item.stage) {
+      case UploadStage.done:
+        return const Color(0xff006400);
+      case UploadStage.failed:
+        return const Color(0xffFE4A4D);
+      default:
+        return const Color(0xff4A59FE);
+    }
+  }
+
+  Widget _buildFileProgressItem(UploadItem item) {
+    final isFailed = item.stage == UploadStage.failed;
+    final isDone = item.stage == UploadStage.done;
+    return Container(
+      padding: EdgeInsets.all(12.w),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xffF2F2F7)),
+        borderRadius: BorderRadius.circular(16.r),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44.w,
+            height: 44.h,
+            decoration: BoxDecoration(
+              color: const Color(0xffECF4FE),
+              border: Border.all(
+                color: const Color(0xff4A59FE),
+                width: 1.5,
+                strokeAlign: BorderSide.strokeAlignInside,
               ),
-              child: Center(
-                child: SvgPicture.asset(
-                  AppAssets.cloudUpload,
-                  width: 24.w,
-                  height: 24.h,
-                  colorFilter: const ColorFilter.mode(
-                    Color(0xff4A59FE),
-                    BlendMode.srcIn,
-                  ),
+              borderRadius: BorderRadius.circular(10.r),
+            ),
+            child: Center(
+              child: SvgPicture.asset(
+                AppAssets.cloudUpload,
+                width: 24.w,
+                height: 24.h,
+                colorFilter: const ColorFilter.mode(
+                  Color(0xff4A59FE),
+                  BlendMode.srcIn,
                 ),
               ),
             ),
-            8.horizontalSpace,
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          file.name,
-                          style: GoogleFonts.dmSans(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 14.sp,
-                            height: 20 / 14,
-                            color: const Color(0xff000000),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        file.isUploaded
-                            ? (file.isTranscribed ? 'Done' : 'Tap to transcribe')
-                            : '${(file.uploadProgress * 100).toInt()}%',
+          ),
+          8.horizontalSpace,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.name,
                         style: GoogleFonts.dmSans(
                           fontWeight: FontWeight.w500,
                           fontSize: 14.sp,
                           height: 20 / 14,
-                          color: file.isUploaded
-                              ? (file.isTranscribed
-                                  ? const Color(0xff006400)
-                                  : const Color(0xff4A59FE))
-                              : const Color(0xff000000),
+                          color: const Color(0xff000000),
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
+                    ),
+                    Text(
+                      _itemStatusLabel(item),
+                      style: GoogleFonts.dmSans(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14.sp,
+                        height: 20 / 14,
+                        color: _itemStatusColor(item),
+                      ),
+                    ),
+                  ],
+                ),
+                8.verticalSpace,
+                Container(
+                  height: 8.h,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: const Color(0xffF2F2F7),
+                    borderRadius: BorderRadius.circular(9999.r),
                   ),
-                  8.verticalSpace,
-                  Container(
-                    height: 8.h,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: const Color(0xffF2F2F7),
-                      borderRadius: BorderRadius.circular(9999.r),
-                    ),
-                    child: FractionallySizedBox(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: file.uploadProgress,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: file.isUploaded
-                              ? (file.isTranscribed
-                                  ? const Color(0xff006400)
-                                  : const Color(0xff4A59FE))
-                              : const Color(0xff4A59FE),
-                          borderRadius: BorderRadius.circular(9999.r),
-                        ),
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: isDone ? 1.0 : item.progress.clamp(0.0, 1.0),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isFailed
+                            ? const Color(0xffFE4A4D)
+                            : (isDone
+                                ? const Color(0xff006400)
+                                : const Color(0xff4A59FE)),
+                        borderRadius: BorderRadius.circular(9999.r),
                       ),
                     ),
+                  ),
+                ),
+                if (isFailed && item.errorMessage != null) ...[
+                  6.verticalSpace,
+                  Text(
+                    item.errorMessage!,
+                    style: GoogleFonts.dmSans(
+                      fontWeight: FontWeight.w400,
+                      fontSize: 12.sp,
+                      color: const Color(0xffFE4A4D),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
