@@ -55,4 +55,19 @@ class ApiEndPoints {
       "${baseUrl}v1/audio-files/upload/batch/presigned-urls";
   static const String uploadBatchComplete =
       "${baseUrl}v1/audio-files/upload/batch/complete";
+
+  // URL import endpoints (YouTube + direct URL)
+  static const String audioFilesCheckUrl =
+      "${baseUrl}v1/audio-files/check-url";
+  static const String audioFilesImportUrl =
+      "${baseUrl}v1/audio-files/import/url";
+
+  // Scan / OCR endpoint
+  static const String aiExtractText = "${baseUrl}v1/ai/extract-text";
+
+  // Podcast search + episode list (Podcast Index style)
+  static const String podcastsSearch = "${baseUrl}v1/podcasts/search";
+  static const String podcastsEpisodes = "${baseUrl}v1/podcasts/episodes";
+  static const String podcastsDownloadAndImport =
+      "${baseUrl}v1/podcasts/download-and-import";
 }

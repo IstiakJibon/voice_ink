@@ -7,6 +7,7 @@ import 'package:voice_ink/features/home/presentation/widget/engine_popup.dart';
 import 'package:voice_ink/features/home/presentation/widget/import_option_tile.dart';
 import 'package:voice_ink/features/home/presentation/widget/language_popup.dart';
 import 'package:voice_ink/features/home/presentation/widget/notification_popup.dart';
+import 'package:voice_ink/features/recording/presentation/pages/recording_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -161,11 +162,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRecordingCard() {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(16.w),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const RecordingScreen()),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(16.w),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
           begin: Alignment(-0.8, -0.5),
           end: Alignment(1.0, 0.5),
           colors: [Color(0xff4A59FE), Color(0xff4A59FE)],
@@ -285,6 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 

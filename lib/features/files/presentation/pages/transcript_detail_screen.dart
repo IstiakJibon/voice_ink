@@ -95,6 +95,10 @@ class _TranscriptDetailScreenState extends State<TranscriptDetailScreen>
           canPop: true,
           onPopInvokedWithResult: (didPop, _) {
             if (didPop) {
+              // Pause any in-progress playback — the cubit is a singleton,
+              // so without this the audio would keep playing after the
+              // screen is gone.
+              context.read<TranscriptDetailCubit>().pause();
               // Refresh the Files list so any status change (e.g.
               // processing → transcribed) is reflected immediately.
               context.read<FilesCubit>().refreshFiles();

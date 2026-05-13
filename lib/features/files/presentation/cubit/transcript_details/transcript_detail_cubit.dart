@@ -158,7 +158,19 @@ class TranscriptDetailCubit extends Cubit<TranscriptDetailState> {
     _currentToken = token;
     _stopTranscriptionPolling();
 
-    emit(state.copyWith(status: TranscriptDetailStatus.loading));
+    // Stop any leftover playback from a previously-opened file before we
+    // start fetching the new one. The cubit is a singleton, so without this
+    // the next file inherits the previous file's playing state.
+    _audioPlayer?.pause();
+    _audioPlayer?.seek(Duration.zero);
+
+    emit(state.copyWith(
+      status: TranscriptDetailStatus.loading,
+      audioStatus: AudioPlayerStatus.idle,
+      currentPosition: Duration.zero,
+      totalDuration: Duration.zero,
+      waveformData: const [],
+    ));
 
     final result = await getFileDetailUseCase.call(fileId: fileId, token: token);
 
@@ -353,9 +365,21 @@ class TranscriptDetailCubit extends Cubit<TranscriptDetailState> {
       emit(state.copyWith(
         audioStatus: AudioPlayerStatus.loading,
         isLoadingWaveform: true,
+        currentPosition: Duration.zero,
+        totalDuration: Duration.zero,
       ));
 
+      // Reset the shared player before loading a new source so the new file
+      // doesn't inherit the previous file's playing state / position.
+      await player.pause();
+      await player.seek(Duration.zero);
+
       await player.setUrl(url);
+      // setUrl can leave the player in a "playing" state on some platforms
+      // if the previous source was playing — pause again after the load so
+      // the user must explicitly press play.
+      await player.pause();
+
       await _generateWaveformData(url);
 
       if (!isClosed) {
@@ -489,7 +513,13 @@ class TranscriptDetailCubit extends Cubit<TranscriptDetailState> {
   // ==================== AUDIO CONTROLS ====================
 
   Future<void> play() async {
-    await _audioPlayer?.play();
+    final player = _audioPlayer;
+    if (player == null) return;
+    // If playback reached the end, seek back to start before playing again.
+    if (player.processingState == ProcessingState.completed) {
+      await player.seek(Duration.zero);
+    }
+    await player.play();
   }
 
   Future<void> pause() async {

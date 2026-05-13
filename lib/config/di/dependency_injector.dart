@@ -37,6 +37,21 @@ import 'package:voice_ink/features/upload/data/repositories/upload_repository_im
 import 'package:voice_ink/features/upload/domain/repositories/upload_repository.dart';
 import 'package:voice_ink/features/upload/domain/usecases/upload_usecase.dart';
 import 'package:voice_ink/features/upload/presentation/cubit/upload_cubit.dart';
+import 'package:voice_ink/features/podcast/data/datasources/podcast_remote.dart';
+import 'package:voice_ink/features/podcast/data/repositories/podcast_repository_impl.dart';
+import 'package:voice_ink/features/podcast/domain/repositories/podcast_repository.dart';
+import 'package:voice_ink/features/podcast/domain/usecases/podcast_usecase.dart';
+import 'package:voice_ink/features/podcast/presentation/cubit/podcast_cubit.dart';
+import 'package:voice_ink/features/scan/data/datasources/scan_remote.dart';
+import 'package:voice_ink/features/scan/data/repositories/scan_repository_impl.dart';
+import 'package:voice_ink/features/scan/domain/repositories/scan_repository.dart';
+import 'package:voice_ink/features/scan/domain/usecases/scan_usecase.dart';
+import 'package:voice_ink/features/scan/presentation/cubit/scan_cubit.dart';
+import 'package:voice_ink/features/url_import/data/datasources/url_import_remote.dart';
+import 'package:voice_ink/features/url_import/data/repositories/url_import_repository_impl.dart';
+import 'package:voice_ink/features/url_import/domain/repositories/url_import_repository.dart';
+import 'package:voice_ink/features/url_import/domain/usecases/url_import_usecase.dart';
+import 'package:voice_ink/features/url_import/presentation/cubit/url_import_cubit.dart';
 
 final GetIt sl = GetIt.instance;
 
@@ -51,6 +66,9 @@ Future<void> configureDependencies() async {
   await _quota();
   await _folder();
   await _upload();
+  await _urlImport();
+  await _scan();
+  await _podcast();
 }
 
 Future<void> _appTheme() async {
@@ -225,4 +243,52 @@ Future<void> _upload() async {
 
   // Data sources
   sl.registerLazySingleton(() => UploadRemoteServices());
+}
+
+Future<void> _urlImport() async {
+  // Cubit
+  sl.registerFactory<UrlImportCubit>(
+      () => UrlImportCubit(urlImportUseCase: sl()));
+
+  // Use-case
+  sl.registerLazySingleton(
+      () => UrlImportUseCase(urlImportRepository: sl()));
+
+  // Repository
+  sl.registerLazySingleton<UrlImportRepository>(
+      () => UrlImportRepositoryImpl(urlImportRemoteServices: sl()));
+
+  // Data sources
+  sl.registerLazySingleton(() => UrlImportRemoteServices());
+}
+
+Future<void> _scan() async {
+  // Cubit
+  sl.registerFactory<ScanCubit>(() => ScanCubit(scanUseCase: sl()));
+
+  // Use-case
+  sl.registerLazySingleton(() => ScanUseCase(scanRepository: sl()));
+
+  // Repository
+  sl.registerLazySingleton<ScanRepository>(
+      () => ScanRepositoryImpl(scanRemoteServices: sl()));
+
+  // Data sources
+  sl.registerLazySingleton(() => ScanRemoteServices());
+}
+
+Future<void> _podcast() async {
+  // Cubit
+  sl.registerFactory<PodcastCubit>(
+      () => PodcastCubit(podcastUseCase: sl()));
+
+  // Use-case
+  sl.registerLazySingleton(() => PodcastUseCase(podcastRepository: sl()));
+
+  // Repository
+  sl.registerLazySingleton<PodcastRepository>(
+      () => PodcastRepositoryImpl(podcastRemoteServices: sl()));
+
+  // Data sources
+  sl.registerLazySingleton(() => PodcastRemoteServices());
 }

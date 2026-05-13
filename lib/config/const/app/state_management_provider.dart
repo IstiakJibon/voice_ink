@@ -13,6 +13,9 @@ import 'package:voice_ink/features/files/presentation/cubit/transcript_details/t
 import 'package:voice_ink/features/folder/presentation/cubit/folder_cubit.dart';
 import 'package:voice_ink/features/quota/presentation/cubit/quota_cubit.dart';
 import 'package:voice_ink/features/upload/presentation/cubit/upload_cubit.dart';
+import 'package:voice_ink/features/podcast/presentation/cubit/podcast_cubit.dart';
+import 'package:voice_ink/features/scan/presentation/cubit/scan_cubit.dart';
+import 'package:voice_ink/features/url_import/presentation/cubit/url_import_cubit.dart';
 
 class StateManagementProviders {
   static List<SingleChildWidget> providers = [
@@ -28,5 +31,8 @@ class StateManagementProviders {
     BlocProvider(create: (context) => sl<QuotaCubit>()),
     BlocProvider(create: (context) => sl<FolderCubit>()),
     BlocProvider(create: (context) => sl<UploadCubit>()),
+    BlocProvider(create: (context) => sl<UrlImportCubit>()),
+    BlocProvider(create: (context) => sl<ScanCubit>()),
+    BlocProvider(create: (context) => sl<PodcastCubit>()),
   ];
 }

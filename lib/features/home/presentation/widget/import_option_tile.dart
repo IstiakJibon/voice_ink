@@ -4,6 +4,10 @@ import 'package:flutter_svg/svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:voice_ink/config/const/app/app_assets.dart';
 import 'package:voice_ink/features/home/presentation/pages/upload_files_screen.dart';
+import 'package:voice_ink/features/podcast/presentation/pages/podcast_search_screen.dart';
+import 'package:voice_ink/features/scan/presentation/pages/scan_notes_screen.dart';
+import 'package:voice_ink/features/url_import/presentation/pages/from_url_import_screen.dart';
+import 'package:voice_ink/features/url_import/presentation/pages/youtube_import_screen.dart';
 
 class ImportOption {
   final String id;
@@ -170,16 +174,28 @@ class ImportOptionsCard extends StatelessWidget {
         );
         break;
       case 'youtube':
-        // TODO: Navigate to YouTube screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const YouTubeImportScreen()),
+        );
         break;
       case 'link':
-        // TODO: Navigate to Link screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const FromUrlImportScreen()),
+        );
         break;
       case 'scan':
-        // TODO: Navigate to Scan screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ScanNotesScreen()),
+        );
         break;
       case 'podcast':
-        // TODO: Navigate to Podcast screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PodcastSearchScreen()),
+        );
         break;
     }
   }

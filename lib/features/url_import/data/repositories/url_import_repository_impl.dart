@@ -1,0 +1,40 @@
+import 'package:dartz/dartz.dart';
+import 'package:voice_ink/core/error/error.dart';
+import 'package:voice_ink/features/url_import/data/datasources/url_import_remote.dart';
+import 'package:voice_ink/features/url_import/domain/entities/url_import_entity.dart';
+import 'package:voice_ink/features/url_import/domain/repositories/url_import_repository.dart';
+
+class UrlImportRepositoryImpl extends UrlImportRepository {
+  final UrlImportRemoteServices urlImportRemoteServices;
+
+  UrlImportRepositoryImpl({required this.urlImportRemoteServices});
+
+  @override
+  Future<Either<Failure, CheckUrlEntity>> checkUrl({
+    required String token,
+    required String url,
+  }) async {
+    return await urlImportRemoteServices.checkUrl(token: token, url: url);
+  }
+
+  @override
+  Future<Either<Failure, ImportUrlEntity>> importUrl({
+    required String token,
+    required String url,
+    required String name,
+    required bool autoTranscribe,
+    required bool speakerIdentification,
+    String language = 'en',
+    String provider = 'assemblyai',
+  }) async {
+    return await urlImportRemoteServices.importUrl(
+      token: token,
+      url: url,
+      name: name,
+      autoTranscribe: autoTranscribe,
+      speakerIdentification: speakerIdentification,
+      language: language,
+      provider: provider,
+    );
+  }
+}
